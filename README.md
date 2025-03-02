@@ -50,6 +50,7 @@ python main.py --rounds 40 --model datajuicer/LLaMA-1B-dj-refine-150B --dataset 
 ```Shell
 python main.py --rounds 60 --model datajuicer/LLaMA-1B-dj-refine-150B --dataset dolly --iid dir0.5 --num_clients 200 --lr 0.0000003 -K 4096 -m 0.05 --log
 
+python main.py --rounds 60 --model gpt2 --dataset dolly --iid dir0.5 --num_clients 200 --lr 0.0000003 -K 4096 -m 0.05 --log
 
 
 3. FedKSeed-Pro on Natural Instructions
