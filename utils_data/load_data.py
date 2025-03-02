@@ -5,6 +5,7 @@ from transformers import AutoTokenizer
 from utils_data.default_tokens import DefaultToken
 from utils_data.partition_data import partition_idx_labeldir
 from collections import Counter
+import json
 
 
 def get_loaders(args, only_eval=False):
@@ -71,3 +72,30 @@ def get_loaders(args, only_eval=False):
     else:
         raise AttributeError(f'dataset {args.dataset} not implemented')
     return list_train_loader, eval_loader, tokenizer
+
+def record_client_datasets(client_datasets, target_sample, output_file):
+    """记录每个客户端的数据集中是否包含目标样本"""
+    target_sample_json = json.loads(target_sample) if isinstance(target_sample, str) else target_sample
+    
+    # 检查每个客户端的数据集
+    client_has_target = {}
+    for client_idx, dataset in enumerate(client_datasets):
+        has_target = False
+        try:
+            for item in dataset:
+                # 比较指令和响应是否匹配
+                if (item.get("instruction") == target_sample_json.get("instruction") and 
+                    item.get("response") == target_sample_json.get("response")):
+                    has_target = True
+                    break
+        except Exception as e:
+            print(f"警告: 处理客户端 {client_idx} 数据集时出错: {str(e)}")
+            has_target = False
+            
+        client_has_target[str(client_idx)] = has_target  # 确保键是字符串
+    
+    # 保存结果
+    with open(output_file, 'w') as f:
+        json.dump(client_has_target, f, indent=2)
+    
+    return client_has_target

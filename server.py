@@ -192,29 +192,72 @@ class Server(object):
         return (loss_total_eval / num_eval).item()
 
     def eval_generate(self, cur_round):
-        self.model = self.model.to(self.device)
         self.model.eval()
+        total_metric = 0
+        count = 0
         
-        progress_bar_eval = tqdm(range(len(self.eval_loader)))
-        acc_total_eval = 0.0
-        num_eval = 0
-        
-        with torch.inference_mode():
+        with torch.no_grad():
             for batch in self.eval_loader:
-                input_ids = batch['input_ids'].to(self.device)
-                label_ids = batch['labels'].to(self.device)
-                output_ids = self.model.generate(
-                    input_ids=input_ids,
-                    max_new_tokens=128,
-                    num_beams=1,
-                )
-                acc_total_eval += rouge_score(output_ids[0][len(input_ids[0]):], label_ids[0], self.tokenizer)
-                progress_bar_eval.update(1)
-                num_eval += len(batch['input_ids'])
-                if num_eval == 0:
-                    num_eval = 1e-10
-                progress_bar_eval.set_description(f'eval at round {cur_round}, metric: {acc_total_eval / num_eval}')
-        print()
-        print()
-        self.model = self.model.cpu()
-        return acc_total_eval / num_eval
+                try:
+                    # 将数据移动到正确的设备
+                    input_ids = batch['input_ids'].to(self.device)
+                    attention_mask = batch['attention_mask'].to(self.device)
+                    
+                    # 设置生成参数
+                    gen_kwargs = {
+                        'max_new_tokens': self.args.gen_max_length,
+                        'min_length': self.args.gen_min_length,
+                        'num_beams': self.args.num_beams,
+                        'pad_token_id': self.tokenizer.pad_token_id,
+                        'attention_mask': attention_mask,
+                    }
+                    
+                    # 使用try-except包装生成过程
+                    try:
+                        with torch.amp.autocast(device_type='cuda'):
+                            output_ids = self.model.generate(
+                                input_ids,
+                                **gen_kwargs
+                            )
+                    except RuntimeError as e:
+                        print(f"生成过程中发生错误: {str(e)}")
+                        continue
+                    
+                    # 计算指标
+                    if self.args.eval_metric == 'rouge':
+                        metric = self.calculate_rouge(output_ids, batch['labels'])
+                    else:
+                        metric = self.calculate_loss(output_ids, batch['labels'])
+                    
+                    total_metric += metric
+                    count += 1
+                    
+                except Exception as e:
+                    print(f"处理批次时发生错误: {str(e)}")
+                    continue
+        
+        return total_metric / max(count, 1)  # 避免除以零
+
+    def create_poisoned_model_by_seedpool(self, cur_round, poisoned_seed_pool, target_client):
+        """创建基于投毒种子池的模型"""
+        tmp_model = deepcopy(self.model_w0)
+        tmp_model.to(self.device)
+        
+        lr = self.args.lr
+        if hasattr(self.args, 'lr_decay'):
+            lr = self.args.lr * math.pow(self.args.lr_decay, cur_round - 1)
+            if self.args.lr_decay != 1.0:
+                print('警告: 种子池目前最好使用恒定学习率')
+        
+        # 使用投毒后的种子池更新模型
+        framework = MeZOFramework(tmp_model, args=self.args, lr=lr, candidate_seeds=self.candidate_seeds)
+        progress_bar = tqdm(range(len(poisoned_seed_pool))) 
+        
+        for seed, grad in poisoned_seed_pool.items():
+            if grad != 0:
+                framework.zo_update(seed=seed, grad=grad)
+            progress_bar.update(1)
+            progress_bar.set_description(f'pull poisoned model for client {target_client.idx} at round{cur_round}')
+        
+        tmp_model = tmp_model.cpu()
+        return tmp_model

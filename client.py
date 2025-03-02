@@ -1,6 +1,7 @@
 from optimizers.mezo_optimizer import *
 from optimizers.mezo_bias_optimizer import *
 from tqdm import tqdm
+import numpy as np
 
 
 class Client(object):
@@ -37,6 +38,7 @@ class Client(object):
         else:
             framework = MeZOFramework(self.model, args=self.args, lr=lr, candidate_seeds=self.candidate_seeds)
         self.model.eval()
+        loss_history = []
         with torch.inference_mode():
             if self.args.batch_or_epoch == 'batch':
                     loss_total_train = 0.0
@@ -69,6 +71,8 @@ class Client(object):
                     progress_bar.set_description(f'client {self.idx} train at epoch {int(cur_step / len(self.train_loader)) + 1}, loss: {loss_total_train / num_trained if num_trained != 0 else 0.0}')
                 else:
                     progress_bar.set_description(f'client {self.idx} train at step {cur_step}, loss: {loss_total_train / num_trained if num_trained != 0 else 0.0}')
+                if not torch.isnan(loss):
+                    loss_history.append(loss.item())
         # save both CPU and GPU memory
         del framework
         self.model = None
@@ -77,6 +81,15 @@ class Client(object):
             memory_record_dic[self.device.index] = {}
             memory_record_dic[self.device.index]['max_memory_allocated'] = torch.cuda.max_memory_allocated(self.device)
             memory_record_dic[self.device.index]['max_memory_reserved'] = torch.cuda.max_memory_reserved(self.device)
+
+        # 确保返回包含损失信息的响应
+        response = {
+            'avg_loss': sum(loss_history) / len(loss_history) if loss_history else 0,
+            'loss_history': loss_history,
+            'round': cur_round
+        }
+        
+        return response
 
     def clear_model(self):
         # clear model to same memory
