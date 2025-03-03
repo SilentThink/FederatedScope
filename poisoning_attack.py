@@ -84,6 +84,7 @@ class PerturbationPoisoningAttack:
         
         return inputs
     
+    # todo: 候选数量不足k1时需要根据与当前轮次种子的平均相似度选取
     def similarity_measurement(self, history_perturbations, current_round_seeds):
         """
         计算相似度并筛选候选投毒序列
@@ -122,13 +123,13 @@ class PerturbationPoisoningAttack:
         inputs = {k: v.to(self.device) for k, v in target_inputs.items()}
         labels = inputs.pop('labels')
         
-        # 修复批量大小不匹配问题
+        # todo: 修复批量大小不匹配问题,这是大语言模型的训练，这样处理是不是不好
         max_len = min(inputs['input_ids'].size(1), labels.size(1))
         inputs['input_ids'] = inputs['input_ids'][:, :max_len]
         inputs['attention_mask'] = inputs['attention_mask'][:, :max_len]
         labels = labels[:, :max_len]
         
-        # 检查candidates是列表还是字典
+        # todo: 这里是根据候选种子查找到对应的种子标量对
         if isinstance(candidates, list):
             # 如果是列表，转换为字典
             candidates_dict = {}
@@ -144,7 +145,7 @@ class PerturbationPoisoningAttack:
             model_pos = deepcopy(model).to(self.device)
             model_neg = deepcopy(model).to(self.device)
             
-            # 应用正负扰动
+            # todo: 应用正负扰动 这里的方法错了，扰动模型的计算是原模型w加减s_i种子生成的扰动z_i乘eps，z_i和w的维度相同
             with torch.no_grad():
                 for name, param in model_pos.named_parameters():
                     param.add_(eps * v_i)
@@ -161,7 +162,7 @@ class PerturbationPoisoningAttack:
                 # 计算目标样本上的标量
                 v_target = (L_pos - L_neg) / (2 * eps)
                 
-                # 计算反应值
+                # todo: 计算反应值：abs(v_target) / (abs(v_i) + abs(v_target))
                 rho_i = abs(v_target) / abs(v_i) if v_i != 0 else float('inf')
                 
                 scores.append((rho_i, s_i, v_i, v_target))
@@ -275,6 +276,7 @@ class PerturbationPoisoningAttack:
         
         print(f"Loss curve saved to {save_path}")
     
+    # todo: 成员推理的方法需要优化
     def membership_inference(self, client_idx, T=5, delta=0.1, eta=0.6):
         """
         多轮投毒观察与成员身份推断
