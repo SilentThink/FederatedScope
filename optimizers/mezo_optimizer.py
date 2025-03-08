@@ -28,7 +28,7 @@ import numpy as np
 
 class MeZOFramework(object):
     def __init__(self, model, args, lr, candidate_seeds):
-        print('FedKSeed')
+        # print('FedKSeed')
         # determine which parameters to optimizes
         self.args = args
         self.lr = lr
@@ -39,6 +39,7 @@ class MeZOFramework(object):
                 self.named_parameters_to_optim.append((name, param))
         self.zo_eps = self.args.zo_eps
         self.candidate_seeds = candidate_seeds
+        self.zo_random_seed = np.random.choice(self.candidate_seeds, 1)[0]
         
     def zo_step(self, batch, local_seed_pool=None):
         """

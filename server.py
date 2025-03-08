@@ -102,12 +102,6 @@ class Server(object):
             progress_bar.update(1)
             progress_bar.set_description(f'server update global model')
 
-    def prepare_aggregate(self):
-        self.model_for_aggregate = deepcopy(self.model)
-        for _, v in self.model_for_aggregate.named_parameters():
-            if v.requires_grad:
-                v.data.zero_()
-
     def online_aggregate(self, client, selected_client_list):
         if self.args.equal_weight:
             weight_array = np.array([1.0 for _ in selected_client_list], dtype=np.float64)
@@ -218,3 +212,7 @@ class Server(object):
         print()
         self.model = self.model.cpu()
         return acc_total_eval / num_eval
+
+    def select_seeds_for_round(self):
+        """每轮随机选择num_seed个种子"""
+        self.selected_seeds = np.random.choice(self.candidate_seeds, size=self.args.num_seed, replace=False)

@@ -1,6 +1,6 @@
 import numpy as np
 import torch
-from torch.utils.data import DataLoader, Subset
+from torch.utils.data import DataLoader, Subset, ConcatDataset
 from transformers import AutoTokenizer
 from utils_data.default_tokens import DefaultToken
 from utils_data.partition_data import partition_idx_labeldir
@@ -9,7 +9,7 @@ from collections import Counter
 
 def get_loaders(args, only_eval=False):
     """
-    Return: list of train_loaders, eval_loader
+    Return: list of train_loaders, eval_loader, tokenizer, target_data
     """
     tokenizer = AutoTokenizer.from_pretrained(args.model, use_fast=True)
     tokenizer.model_max_length = args.max_length
@@ -35,14 +35,34 @@ def get_loaders(args, only_eval=False):
         data_collator = LLMDataCollator(tokenizer=tokenizer)
 
         # only use a subset of raw dataset
-        raw_datasets, _ = torch.utils.data.dataset.random_split(raw_datasets, [int(len(raw_datasets) * args.dataset_subsample), len(raw_datasets) - int(len(raw_datasets) * args.dataset_subsample)])
+        raw_datasets, nonmember_datasets = torch.utils.data.dataset.random_split(raw_datasets, [int(len(raw_datasets) * args.dataset_subsample), len(raw_datasets) - int(len(raw_datasets) * args.dataset_subsample)])
         y_all = np.array([item['categories'] for item in raw_datasets])
         index_eval = np.where(y_all == args.zerotask)[0]
+
         # delete the indices of eval samples from the all set
         index_train = np.delete(np.arange(len(y_all)), index_eval)
         raw_datasets = np.array(raw_datasets)
         train_set = raw_datasets[index_train]
         eval_set = raw_datasets[index_eval]
+        
+        # 构造攻击目标数据
+        num_target = args.num_target
+        target_member_ratio = args.target_member_ratio
+        index_target_member = np.random.choice(len(train_set), int(num_target*target_member_ratio), replace=False)
+        index_target_nonmember = np.random.choice(len(nonmember_datasets), num_target-int(num_target*target_member_ratio), replace=False)
+        
+        target_member_set = Subset(train_set, indices=index_target_member)
+        target_nonmember_set = Subset(nonmember_datasets, indices=index_target_nonmember)
+            
+        # 合并训练集和测试集的目标数据
+        target_dataset = ConcatDataset([target_member_set, target_nonmember_set])
+        target_loader = DataLoader(
+            target_dataset, 
+            batch_size=1,  # 每次只取一个样本评估
+            shuffle=False,  # 保持顺序以便跟踪每个样本
+            collate_fn=data_collator
+        )
+        
         y_train = np.array([item['categories'] for item in train_set])
         counter = Counter(y_train)
         noniid = args.iid
@@ -70,4 +90,4 @@ def get_loaders(args, only_eval=False):
         list_train_loader, eval_loader = get_instruction_dataset(args, tokenizer, only_eval=only_eval)
     else:
         raise AttributeError(f'dataset {args.dataset} not implemented')
-    return list_train_loader, eval_loader, tokenizer
+    return list_train_loader, eval_loader, tokenizer, target_loader

@@ -1,20 +1,58 @@
-修改代码
+# 成员推理攻击实现要求
 
-'''
-{"instruction": "Who are N-Dubz?", "context": "", "response": "N-Dubz are a popular band in the United Kingdom, made up of Tulisa, Fazer, and Dappy, formed out of London. The band were formed when they were young teenagers in the early 2000s. They were inspired to form the band by Dappy's late father, known to the band as \"Uncle B\". Their song \"Papa can you hear me?\" is a tribute to Uncle B. Tulisa and Dappy are cousins, whilst Fazer has always been a close friend.\nThe trio have had many successful hits, and collaborated with popular artists like Tinchy Strider and Skepta. They parted ways in 2011, and Dappy started a solo career, whilst Tulisa became a judge on the popular UK show \"The X Factor\". She formed and mentored the winning band Little Mix. \nThe band reunited in 2022 and released new music, along with a sold out UK tour.", "category": "general_qa"}
-'''
-需要记录客户端的数据集，判断攻击的目标数据是否在客户端i的本地数据集中。
+# （1）推理目标数据是否属于全体训练集
+## 数据集准备
+采用 databricks-dolly-15k.jsonl 数据集选取部分数据进行联邦训练
+数据格式如下：
+```
+{
+    "instruction": "...",
+    "response": "...",
+    "context": "...",
+    "category": "..."
+}
+{"instruction": "What is the Pizza history?", "context": "Modern pizza evolved from similar flatbread dishes in Naples, Italy, in the 18th or early 19th century.\nThe word pizza was first documented in AD 997 in Gaeta and successively in different parts of Central and Southern Italy. Pizza was mainly eaten in Italy and by emigrants from there. This changed after World War II when Allied troops stationed in Italy came to enjoy pizza along with other Italian foods.", "response": "The history of pizza begins in antiquity, as various ancient cultures produced basic flatbreads with several toppings.\n\nA precursor of pizza was probably the focaccia, a flatbread known to the Romans as panis focacius, to which toppings were then added. Modern pizza evolved from similar flatbread dishes in Naples, Italy, in the 18th or early 19th century.\n\nThe word pizza was first documented in AD 997 in Gaeta and successively in different parts of Central and Southern Italy. Pizza was mainly eaten in Italy and by emigrants from there. This changed after World War II when Allied troops stationed in Italy came to enjoy pizza along with other Italian foods.\nSome commentators have suggested that the origins of modern pizza can be traced to pizzarelle, which were kosher for Passover cookies eaten by Roman Jews after returning from the synagogue on that holiday, though some also trace its origins to other Italian paschal bread. Other examples of flatbreads that survive to this day from the ancient Mediterranean world are focaccia (which may date back as far as the ancient Etruscans); Manakish in the Levant, coca (which has sweet and savory varieties) from Catalonia, Valencia and the Balearic Islands; the Greek Pita; Lepinja in the Balkans; or Piadina in the Romagna part of Emilia-Romagna in Italy", "category": "information_extraction"}
+```
+将数据集中的数据按照比例划分,一部分用作训练集和测试集（再做划分），另一部分为nonmember数据集，从划分后的训练集以及nonmember数据集中选取成员推理攻击的目标数据
 
-攻击者针对databricks-dolly-15k.jsonl数据集中的上面这个数据实例，进行投毒攻击，判断该数据是否在客户端i的本地数据集中。
 
-攻击者有对服务器端的控制权。每一大轮训练，服务器需要指定客户端训练的种子，而不是随机选择，同时如果进行攻击，服务器会对维护的全局种子标量池的部分进行篡改，首先筛选与该轮次指定客户端训练的种子重合或者对应的扰动向量相似的种子筛选k1个，之后再对这k1个种子根据优先级投毒标量选择进行筛选，筛选出k2个种子，之后对全局种子池中的这k2个种子的标量进行篡改。篡改后服务器再将初始模型加上篡改后的种子标量池更新的模型发给客户端进行本地训练。
+## 客户端训练数据划分
+将训练集的数据划分给各个客户端
 
-客户端训练后将多轮的种子梯度标量上传给服务器，攻击者服务器根据目标客户端上传的多轮种子标量信息对全局种子标量池进行更新，进而得到多轮的全局模型，用这多轮模型对目标攻击数据进行评测，得到多轮损失数据。
+## 服务器端控制
+- 攻击者拥有服务器端的控制权
+服务器维持一个种子标量池，负责对全局模型的更新：全局模型(w) = 初始模型(w0) + sum(v_i*z_i)。其中v_i是种子标量池中的种子的梯度标量，z_i是由种子s_i生成的维度和w0相同的高斯向量。
+- 每轮训练时：
+  服务器选取特定比例的客户端参加本轮训练，每隔T轮进行一次投毒
+  1. 服务器指定客户端训练的种子
+  2. 如果进行攻击，服务器会篡改全局种子标量池：
+    攻击者服务器选择本轮训练的候选种子集。计算当前全局模型在各个种子对应的梯度标量，在全局种子标量池中对应种子的标量篡改为$v_{i^{\ast}}^{j}{'} = v_{i^{\ast}}^{j} - v_{i^{\ast}}^{j}(x,y)/v_{i^{\ast}}^{j}$
 
-修改设定，如果实施攻击，那么每轮参与训练的客户端就不是随机选，而是攻击的目标客户端一定参与训练，其他客户端随机选择
+  3. 将初始模型加上种子标量池更新的模型发给客户端
 
-设定参数：投毒间隔T。每隔T轮服务器进行一次投毒，通过观察投毒后的T轮全局模型再目标数据的loss的变化判断是否是目标客户端的成员
+## 客户端训练
+若客户端参与本轮训练，则会接收到服务器下发的当前全局模型和客户端本轮训练的候选种子
+客户端利用本地训练集和候选种子对全局模型进行多轮本地微调训练
+每次本地训练都在候选种子中抽取一个进行零阶优化微调，得到对应的梯度标量
+- 客户端训练后上传多轮的种子梯度标量
+- 服务器根据目标客户端上传的多轮种子标量信息更新全局种子标量池
 
-将要攻击的数据保存再额外的文件中，同时要记录目标客户端训练集是否有该数据以判断最终攻击结果的正确性
+## 聚合评估
+- 服务器收到客户端上传的梯度标量后，进行聚合
+- 聚合后，服务器将聚合后的梯度标量更新到全局模型
+- 使用更新后的全局模型计算在各目标数据上的loss，并记录loss和对应的轮次
 
+finished:
+1.设计Attacker类，其继承Server，其作为攻击者在充当服务器的角色的同时可以选择在某个训练的轮次中对种子标量池进行投毒。
+
+2.进一步完善实验程序整体代码，进行投毒成员推理攻击的实验。每隔5轮针对目标数据进行一次投毒，记录所有投毒和未投毒轮次得到的全局模型在目标数据上的loss。
+
+todo:
+3.每轮训练是再全体客户端中选择一定比例进行本地训练，但如果投毒轮次，目标数据中的成员数据并不在被选择的客户端数据集里，就没有对被篡改标量的修复现象。
+解决方案：加大投毒周期
+
+4.在对当前轮次的种子投毒后，下一次训练的种子又要重新选取，客户端对投毒影响的修正只能在投毒本轮执行，这导致无法明显观察到修正作用
+解决方案：如果投毒，在投毒周期的轮次中选取相同种子
+
+# （2）推理目标数据是否属于目标客户端的训练集
 

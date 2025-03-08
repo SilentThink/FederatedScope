@@ -52,7 +52,6 @@ python main.py --rounds 60 --model datajuicer/LLaMA-1B-dj-refine-150B --dataset 
 
 python main.py --rounds 60 --model gpt2 --dataset dolly --iid dir0.5 --num_clients 200 --lr 0.0000003 -K 4096 -m 0.05 --log
 
-
 3. FedKSeed-Pro on Natural Instructions
 ```Shell
 # On Natural Instructions, the number of clients `num_clients` does not require manual setting. 
@@ -63,6 +62,17 @@ python main.py --rounds 40 --bias_sampling  --model datajuicer/LLaMA-1B-dj-refin
 4. FedKSeed-Pro on Dolly-15K with $\alpha=0.5$
 ```Shell
 python main.py --rounds 60 --bias_sampling  --model datajuicer/LLaMA-1B-dj-refine-150B --dataset dolly --iid dir0.5 --num_clients 200 --lr 0.0000003 -K 1024 -m 0.05 --log
+```
+
+5. FedKSeed on Dolly-15K with $\alpha=0.5$ and attack
+```Shell
+python main.py --rounds 60 --model facebook/opt-125m --dataset dolly --iid dir0.5 --num_clients 50 --lr 0.0000003 -K 4096 -m 0.2 --log --attack --attack_amplitude 0.5 --num_target 10 --target_member_ratio 0.7 --local_step 200 --poison_interval 5
+
+python main.py --rounds 60 --model facebook/opt-125m --dataset dolly --dataset_subsample 0.5 --iid true --num_clients 20 --lr 0.0000003 -K 2048 -m 0.5 --log --attack --attack_amplitude 0.5 --num_target 10 --target_member_ratio 0.7 --local_step 200 --poison_interval 10
+
+python main.py --rounds 60 --model facebook/opt-125m --dataset dolly --dataset_subsample 0.5 --iid true --num_clients 20 --lr 0.0000003 -K 2048 -m 0.5 --log --attack --attack_amplitude 0.5 --num_target 10 --target_member_ratio 0.7 --batch_or_epoch epoch --local_step 1 --poison_interval 5
+
+python main.py --rounds 60 --model facebook/opt-125m --dataset dolly --dataset_subsample 0.5 --iid true --num_clients 20 --lr 0.0000003 -K 2048 -m 0.5 --log --attack --attack_amplitude 0.5 --num_target 1 --target_member_ratio 0 --batch_or_epoch epoch --local_step 1 --poison_interval 5
 ```
 
 ## License

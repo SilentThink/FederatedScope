@@ -4,7 +4,7 @@ from tqdm import tqdm
 
 
 class Client(object):
-    def __init__(self, idx, args, candidate_seeds, train_loader):
+    def __init__(self, idx, args, train_loader):
         self.idx = idx
         self.args = args
         self.train_loader = train_loader
@@ -12,17 +12,16 @@ class Client(object):
         self.model = None
 
         self.device = torch.device(f'cuda:{args.device}')
-        self.candidate_seeds = candidate_seeds
 
-    def local_train_with_seed_pool(self, pulled_model, cur_round, memory_record_dic=None, probabilities=None, gradient_history=None):
+    def local_train_with_seed_pool(self, pulled_model, cur_round, selected_seeds, memory_record_dic=None, probabilities=None, gradient_history=None):
         self.model = pulled_model
         self.model.to(self.device)
         
         if memory_record_dic is not None:
             torch.cuda.empty_cache()
         
-        # initialize a seed pool
-        self.local_seed_pool = {seed: 0.0 for seed in self.candidate_seeds}
+        # 只初始化选定种子的标量池
+        self.local_seed_pool = {seed: 0.0 for seed in selected_seeds}
 
         lr = self.args.lr
         
@@ -33,9 +32,9 @@ class Client(object):
             
         if self.args.bias_sampling:
             assert probabilities is not None
-            framework = MeZOBiasOptimizer(self.model, args=self.args, lr=lr, candidate_seeds=self.candidate_seeds, probabilities=probabilities, gradient_history=gradient_history)
+            framework = MeZOBiasOptimizer(self.model, args=self.args, lr=lr, candidate_seeds=selected_seeds, probabilities=probabilities, gradient_history=gradient_history)
         else:
-            framework = MeZOFramework(self.model, args=self.args, lr=lr, candidate_seeds=self.candidate_seeds)
+            framework = MeZOFramework(self.model, args=self.args, lr=lr, candidate_seeds=selected_seeds)
         self.model.eval()
         with torch.inference_mode():
             if self.args.batch_or_epoch == 'batch':
