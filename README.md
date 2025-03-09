@@ -73,6 +73,15 @@ python main.py --rounds 60 --model facebook/opt-125m --dataset dolly --dataset_s
 python main.py --rounds 60 --model facebook/opt-125m --dataset dolly --dataset_subsample 0.5 --iid true --num_clients 20 --lr 0.0000003 -K 2048 -m 0.5 --log --attack --attack_amplitude 0.5 --num_target 10 --target_member_ratio 0.7 --batch_or_epoch epoch --local_step 1 --poison_interval 5
 
 python main.py --rounds 60 --model facebook/opt-125m --dataset dolly --dataset_subsample 0.5 --iid true --num_clients 20 --lr 0.0000003 -K 2048 -m 0.5 --log --attack --attack_amplitude 0.5 --num_target 1 --target_member_ratio 0 --batch_or_epoch epoch --local_step 1 --poison_interval 5
+
+python main.py --rounds 60 --model TinyLlama/TinyLlama-1.1B-Chat-v1.0 --dataset dolly --dataset_subsample 0.5 --num_clients 50 --lr 0.0000003 -K 2048 -m 0.2 --log --attack --attack_amplitude 0.5 --num_target 1 --target_member_ratio 1 --batch_or_epoch batch --local_step 200 --poison_interval 10
+
+python main.py --rounds 60 --model facebook/opt-125m --dataset dolly --dataset_subsample 0.5 --num_clients 50 --lr 0.0000003 -K 2048 -m 0.2 --log --attack --attack_amplitude 0.5 --num_target 1 --target_member_ratio 1 --batch_or_epoch batch --local_step 200 --poison_interval 4
+
+python main.py --rounds 60 --model facebook/opt-125m --dataset dolly --dataset_subsample 0.5 --num_clients 50 --lr 0.0000003 -K 4096 -m 0.2 --log --attack --attack_amplitude 0.5 --num_target 1 --target_member_ratio 1 --batch_or_epoch batch --local_step 200 --poison_interval 4
+效果还行
+
+python main.py --rounds 60 --model facebook/opt-125m --dataset dolly --dataset_subsample 0.5 --num_clients 50 --lr 0.0000003 -K 4096 -m 0.2 --log --attack --attack_amplitude 0.5 --num_target 1 --target_member_ratio 0 --batch_or_epoch batch --local_step 200 --poison_interval 5
 ```
 
 ## License

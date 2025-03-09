@@ -57,7 +57,7 @@ if __name__ == '__main__':
     # Training args only for `FedKSeed`
     parser.add_argument('-K', type=int, default=4096, help='number of candidate seeds')
     parser.add_argument('--zo_eps', type=float, default=0.0005, help=r'\eps in MeZO')
-    parser.add_argument('--num_seed', type=int, default=64, help='number of training candidate seeds per round')
+    parser.add_argument('--num_seed', type=int, default=256, help='number of training candidate seeds per round')
 
     # Training args only for `FedKSeed-Pro`
     parser.add_argument('--bias_sampling', default=False, action='store_true', help='if `true`, the probabilities of candidate seeds to be sampled are not identical, i.e., FedKSeed-Pro')
@@ -68,7 +68,7 @@ if __name__ == '__main__':
     parser.add_argument('--device', type=int, default=0, help='index of the targeted cuda device')
     parser.add_argument('--log', default=False, action='store_true', help='if `true`, running logs will be recorded in files')
     parser.add_argument('--log_root', default='logs', help='root path of log files')
-    parser.add_argument('--seed', default=62, type=int, help='global seed, for reproducibility')
+    parser.add_argument('--seed', default=3, type=int, help='global seed, for reproducibility')
     
     # Evaluation
     parser.add_argument('--eval_metric', default='rouge', type=str, choices=['rouge', 'loss'], help='metric to evaluate global model in the last round')
@@ -198,16 +198,18 @@ if __name__ == '__main__':
         else:
             probabilities = None
 
+        # 服务器为投毒轮选择种子
+        server.select_seeds_for_round()
+
         if args.attack and server.should_poison(round=r):
-            # 服务器为投毒轮选择种子
-            server.select_seeds_for_round()
             server.poison_seed_pool(round=r)
             server.update_global_model_by_seed_pool()
-            # todo: 投毒后记录全局模型对目标数据的损失
+            # 投毒后记录全局模型对目标数据的损失
+            print("Recording target loss after poisoning...")
             server.record_target_loss(round=r)    
-        elif not args.attack:
-            # 服务器为每轮选择种子
-            server.select_seeds_for_round()
+        # elif not args.attack:
+        #     # 服务器为每轮选择种子
+        #     server.select_seeds_for_round()
 
             
         for client in selected_client:
