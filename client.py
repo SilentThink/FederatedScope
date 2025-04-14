@@ -20,55 +20,50 @@ class Client(object):
         if memory_record_dic is not None:
             torch.cuda.empty_cache()
         
-        # 只初始化选定种子的标量池
+        # 只初始化选定种子的标量池 
         self.local_seed_pool = {seed: 0.0 for seed in selected_seeds}
 
         lr = self.args.lr
         
+        # 修改迭代逻辑,确保完整训练本地数据
         if self.args.batch_or_epoch == 'epoch':
-            iter_steps = self.args.local_step * len(self.train_loader)
+            # 训练指定轮数,每轮完整训练一遍数据
+            num_epochs = self.args.local_step
         else:
-            iter_steps = self.args.local_step
+            # 计算需要的epoch数,确保所有数据都被训练
+            num_epochs = max(1, self.args.local_step // len(self.train_loader))
             
         if self.args.bias_sampling:
-            assert probabilities is not None
             framework = MeZOBiasOptimizer(self.model, args=self.args, lr=lr, candidate_seeds=selected_seeds, probabilities=probabilities, gradient_history=gradient_history)
         else:
             framework = MeZOFramework(self.model, args=self.args, lr=lr, candidate_seeds=selected_seeds)
+
         self.model.eval()
         with torch.inference_mode():
-            if self.args.batch_or_epoch == 'batch':
-                    loss_total_train = 0.0
-                    num_trained = 0
-                    progress_bar = tqdm(range(iter_steps))
+            for epoch in range(num_epochs):
+                loss_total_train = 0.0
+                num_trained = 0
+                progress_bar = tqdm(range(len(self.train_loader)))
+                self.train_iterator = iter(self.train_loader) # 每个epoch重置迭代器
+                
+                # 完整训练一遍数据集
+                for _ in range(len(self.train_loader)):
+                    batch = next(self.train_iterator)
+                    batch = {
+                        'input_ids': batch['input_ids'].to(self.device),
+                        'labels': batch['labels'].to(self.device), 
+                        'attention_mask': batch['attention_mask'].to(self.device)
+                    }
+                    logits, loss = framework.zo_step(batch, local_seed_pool=self.local_seed_pool)
+                    progress_bar.update(1)
                     
-            for cur_step in range(iter_steps):
-                # init epoch progress bar
-                if self.args.batch_or_epoch == 'epoch':
-                    if cur_step % len(self.train_loader) == 0:
-                        loss_total_train = 0.0
-                        num_trained = 0
-                        progress_bar = tqdm(range(len(self.train_loader)))
-                try:
-                    batch = next(self.train_iterator)
-                except StopIteration:
-                    self.train_iterator = iter(self.train_loader)
-                    batch = next(self.train_iterator)
-                batch = {
-                    'input_ids': batch['input_ids'].to(self.device),
-                    'labels': batch['labels'].to(self.device),
-                    'attention_mask': batch['attention_mask'].to(self.device) 
-                }
-                logits, loss = framework.zo_step(batch, local_seed_pool=self.local_seed_pool)
-                progress_bar.update(1)
-                if (not torch.isnan(loss)) and (self.args.grad_clip <= 0 or loss != 0.0):
-                    loss_total_train += loss
-                    num_trained += len(batch['input_ids'])
-                if self.args.batch_or_epoch == 'epoch':
-                    progress_bar.set_description(f'client {self.idx} train at epoch {int(cur_step / len(self.train_loader)) + 1}, loss: {loss_total_train / num_trained if num_trained != 0 else 0.0}')
-                else:
-                    progress_bar.set_description(f'client {self.idx} train at step {cur_step}, loss: {loss_total_train / num_trained if num_trained != 0 else 0.0}')
-        # save both CPU and GPU memory
+                    if (not torch.isnan(loss)) and (self.args.grad_clip <= 0 or loss != 0.0):
+                        loss_total_train += loss
+                        num_trained += len(batch['input_ids'])
+                        
+                    progress_bar.set_description(f'client {self.idx} train at epoch {epoch+1}, loss: {loss_total_train / num_trained if num_trained != 0 else 0.0}')
+
+        # 释放内存
         del framework
         self.model = None
         

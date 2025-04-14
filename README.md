@@ -78,11 +78,14 @@ python main.py --rounds 60 --model TinyLlama/TinyLlama-1.1B-Chat-v1.0 --dataset 
 
 python main.py --rounds 60 --model facebook/opt-125m --dataset dolly --dataset_subsample 0.5 --num_clients 50 --lr 0.0000003 -K 2048 -m 0.2 --log --attack --attack_amplitude 0.5 --num_target 1 --target_member_ratio 1 --batch_or_epoch batch --local_step 200 --poison_interval 4
 
-python main.py --rounds 60 --model facebook/opt-125m --dataset dolly --dataset_subsample 0.5 --num_clients 50 --lr 0.0000003 -K 4096 -m 0.2 --log --attack --attack_amplitude 0.5 --num_target 1 --target_member_ratio 1 --batch_or_epoch batch --local_step 200 --poison_interval 4
+python main.py --rounds 60 --model facebook/opt-125m --dataset dolly --dataset_subsample 0.5 --num_clients 50 --lr 0.0000003 -K 4096 -m 0.2 --log --attack --attack_amplitude 0.5 --num_target 1 --target_member_ratio 1 --batch_or_epoch batch --local_step 200 --poison_interval 5
 效果还行
 
 python main.py --rounds 60 --model facebook/opt-125m --dataset dolly --dataset_subsample 0.5 --num_clients 50 --lr 0.0000003 -K 4096 -m 0.2 --log --attack --attack_amplitude 0.5 --num_target 1 --target_member_ratio 0 --batch_or_epoch batch --local_step 200 --poison_interval 5
 ```
+
+修改每轮训练全部数据，减小训练体量
+python main.py --rounds 20 --model facebook/opt-125m --dataset dolly --dataset_subsample 0.05 --num_clients 10 --lr 0.0000004 -K 2048 -m 1 --log --attack --attack_amplitude 0.05 --num_target 20 --target_member_ratio 0.5 --batch_or_epoch epoch --local_step 1 --poison_interval 3
 
 ## License
 This project adopts the Apache-2.0 License. 
