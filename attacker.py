@@ -52,14 +52,16 @@ class Attacker(Server):
             return
         
         print("Attacker is poisoning seed pool...")
-            
         self.poison_rounds.append(round)
+        
+        # 计算衰减系数 (round从0开始)
+        decay = 1.0 / (1.0 + round/self.args.rounds)  # 随轮数增加而衰减
+        current_amplitude = self.attack_amplitude * decay
         
         # 将当前模型转移到GPU
         self.model = self.model.to(self.device)
         self.model.eval()
         
-        # todo: 这一步的时间复杂度高，如果参数num_seed和num_target比较大的话非常耗时
         with torch.inference_mode():
             for idx, batch in enumerate(self.target_loader):
                 batch = {
@@ -87,14 +89,12 @@ class Attacker(Server):
                     
                     # 篡改种子标量池中对应种子的标量
                     if seed in self.seed_pool:
-                        v_original = self.seed_pool[seed]
-                        # todo: 这里的篡改幅度需要斟酌调整 根据公式篡改标量: v' = v - v_target/(v+v_target)
-                        self.seed_pool[seed] = v_original - self.attack_amplitude*v_target
+                        # 使用衰减后的攻击幅度
+                        self.seed_pool[seed] -= current_amplitude * v_target
                     
                     del framework
 
         # 投毒完成后将模型移回CPU以节省显存
         self.model = self.model.cpu()
-        
-        
-        
+
+

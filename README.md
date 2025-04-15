@@ -85,8 +85,17 @@ python main.py --rounds 60 --model facebook/opt-125m --dataset dolly --dataset_s
 ```
 
 修改每轮训练全部数据，减小训练体量
-python main.py --rounds 20 --model facebook/opt-125m --dataset dolly --dataset_subsample 0.05 --num_clients 10 --lr 0.0000004 -K 2048 -m 1 --log --attack --attack_amplitude 0.05 --num_target 20 --target_member_ratio 0.5 --batch_or_epoch epoch --local_step 1 --poison_interval 3
+非成员数据
+python main.py --rounds 29 --model facebook/opt-125m --dataset dolly --dataset_subsample 0.05 --num_clients 10 -m 1 --lr 0.0000004 -K 4096 --num_seed 80 --log --attack --attack_amplitude 0.1 --num_target 10 --target_member_ratio 0 --batch_or_epoch epoch --local_step 1 --poison_interval 5
 
+成员数据
+python main.py --rounds 29 --model facebook/opt-125m --dataset dolly --dataset_subsample 0.05 --num_clients 10 -m 1 --lr 0.0000004 -K 4096 --num_seed 80 --log --attack --attack_amplitude 0.1 --num_target 10 --target_member_ratio 1 --batch_or_epoch epoch --local_step 1 --poison_interval 5 
+
+非成员数据
+python main.py --rounds 59 --model facebook/opt-125m --dataset dolly --dataset_subsample 0.02 --num_clients 5 -m 1 --lr 0.0000005 -K 1024 --num_seed 32 --log --attack --attack_amplitude 0.5 --num_target 10 --target_member_ratio 0 --batch_or_epoch epoch --local_step 1 --poison_interval 5 --seed 777
+
+成员数据
+python main.py --rounds 59 --model facebook/opt-125m --dataset dolly --dataset_subsample 0.02 --num_clients 5 -m 1 --lr 0.0000005 -K 1024 --num_seed 32 --log --attack --attack_amplitude 0.5 --num_target 10 --target_member_ratio 1 --batch_or_epoch epoch --local_step 1 --poison_interval 5 --seed 777
 ## License
 This project adopts the Apache-2.0 License. 
 If the implementations and/or our paper were useful to you, please consider citing this [work](https://arxiv.org/abs/2312.06353):

@@ -8,7 +8,7 @@ from attacker import Attacker
 from server import Server
 from client import Client
 from utils_data.load_data import get_loaders
-
+import csv
 import yaml
 from copy import deepcopy
 import json
@@ -97,14 +97,21 @@ if __name__ == '__main__':
     setup_seed(args.seed)
     list_train_loader, eval_loader, tokenizer, target_loader = get_loaders(args)
     
+    # 简化log_dir设置
+    time_str = time.strftime("%Y%m%d_%H%M%S")
+    log_dir = os.path.join(args.log_root, time_str) if args.log_root else time_str
+
     if args.dataset == 'instruct':
         args.iid = 'meta'
-    log_dir = time_stamp
-
-    if args.log_root != '':
-        log_dir = os.path.join(args.log_root, log_dir)
     if args.log:
         os.makedirs(log_dir)
+        # 创建结果CSV文件并写入表头
+        with open(os.path.join(log_dir, 'results.csv'), 'w', newline='') as f:
+            writer = csv.writer(f)
+            if args.attack:
+                writer.writerow(['Round', 'Eval_Metric', 'Target_ID', 'Target_Loss', 'Is_Poison_Round'])
+            else:
+                writer.writerow(['Round', 'Eval_Metric'])
     config = yaml.dump(args, None)
     config = '\n'.join(config.split('\n')[1:])
     print('Configs: ')
@@ -186,10 +193,14 @@ if __name__ == '__main__':
     if args.log:
         with open(os.path.join(log_dir, 'memory.json'), 'w') as writer:
             json.dump(memory_record_dic, writer)
-        with open(os.path.join(log_dir, 'results.json'), 'w') as writer:
-            json.dump({
-                'eval_avg_acc': eval_avg_acc
-            }, writer)
+        # 记录初始轮次结果
+        with open(os.path.join(log_dir, 'results.csv'), 'a', newline='') as f:
+            writer = csv.writer(f)
+            if args.attack:
+                for idx, loss_history in server.target_loss_history.items():
+                    writer.writerow([0, eval_result, idx, loss_history[-1][1] if loss_history else 'N/A', False])
+            else:
+                writer.writerow([0, eval_result])
     for r in range(1, args.rounds + 1):
         selected_client = [client_list[i] for i in client_indices_rounds[r-1]]
         
@@ -234,16 +245,15 @@ if __name__ == '__main__':
         if args.log:
             with open(os.path.join(log_dir, 'memory.json'), 'w') as writer:
                 json.dump(memory_record_dic, writer)
-            with open(os.path.join(log_dir, 'results.json'), 'w') as writer:
-                results = {
-                    'eval_avg_acc': eval_avg_acc,
-                }
+            # 记录当前轮次结果
+            with open(os.path.join(log_dir, 'results.csv'), 'a', newline='') as f:
+                writer = csv.writer(f)
                 if args.attack:
-                    results.update({
-                        'target_loss_history': server.target_loss_history,
-                        'poison_rounds': server.poison_rounds
-                    })
-                json.dump(results, writer, indent=2)
+                    is_poison = r in server.poison_rounds
+                    for idx, loss_history in server.target_loss_history.items():
+                        writer.writerow([r, eval_result, idx, loss_history[-1][1] if loss_history else 'N/A', is_poison])
+                else:
+                    writer.writerow([r, eval_result])
 
     # reset seed to have an eval_loader with the same data samples
     args.eval_metric = previous_metric
@@ -252,8 +262,8 @@ if __name__ == '__main__':
     server.eval_loader = eval_loader_final
     eval_result = server.eval(cur_round=args.rounds, eval_avg_acc=eval_avg_acc)
     if args.log:
-        with open(os.path.join(log_dir, 'final_eval.json'), 'w') as writer:
-            json.dump({
-                f'final_eval_{args.eval_metric}': eval_result
-            }, writer)
+        with open(os.path.join(log_dir, 'final_eval.csv'), 'w', newline='') as f:
+            writer = csv.writer(f)
+            writer.writerow(['Metric', 'Value'])
+            writer.writerow([args.eval_metric, eval_result])
     print(f'final round {args.eval_metric}: {eval_result}')
