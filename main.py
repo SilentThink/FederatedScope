@@ -109,7 +109,7 @@ if __name__ == '__main__':
         with open(os.path.join(log_dir, 'results.csv'), 'w', newline='') as f:
             writer = csv.writer(f)
             if args.attack:
-                writer.writerow(['Round', 'Eval_Metric', 'Target_ID', 'Target_Loss', 'Is_Poison_Round'])
+                writer.writerow(['Target_ID', 'Round', 'Eval_Metric', 'Target_Loss', 'Is_Poison_Round', 'Is_Member'])
             else:
                 writer.writerow(['Round', 'Eval_Metric'])
     config = yaml.dump(args, None)
@@ -251,7 +251,10 @@ if __name__ == '__main__':
                 if args.attack:
                     is_poison = r in server.poison_rounds
                     for idx, loss_history in server.target_loss_history.items():
-                        writer.writerow([r, eval_result, idx, loss_history[-1][1] if loss_history else 'N/A', is_poison])
+                        # 从target_data中获取真实成员身份
+                        is_member = target_data[idx]['is_member']
+                        writer.writerow([idx, r, eval_result, loss_history[-1][1] if loss_history else 'N/A', 
+                                       is_poison, is_member])
                 else:
                     writer.writerow([r, eval_result])
 

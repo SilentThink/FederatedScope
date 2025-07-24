@@ -96,5 +96,43 @@ class Attacker(Server):
 
         # 投毒完成后将模型移回CPU以节省显存
         self.model = self.model.cpu()
+    
+    def select_seeds_for_round(self):
+        """重写服务器的种子选择方法
+        - 一半种子从上一轮攻击使用的种子中选择恢复效果最大的
+        - 另一半从剩余种子中随机选择
+        """
+        num_seeds_per_part = self.args.num_seed // 2  # 每部分选择的种子数量
+        
+        if not hasattr(self, 'last_attack_seeds') or not self.last_attack_seeds:
+            # 首次选择或没有历史攻击种子时,完全随机选择
+            self.selected_seeds = np.random.choice(self.candidate_seeds, 
+                                                 size=self.args.num_seed, 
+                                                 replace=False)
+            return
+            
+        # 计算上轮攻击种子的恢复效果(使用种子对应的梯度标量绝对值)
+        recovery_effects = {}
+        for seed in self.last_attack_seeds:
+            if seed in self.seed_pool:
+                recovery_effects[seed] = abs(self.seed_pool[seed])
+            
+        # 按恢复效果排序并选择效果最好的一半种子
+        sorted_seeds = sorted(recovery_effects.items(), 
+                            key=lambda x: x[1], 
+                            reverse=True)
+        selected_old = [seed for seed, _ in sorted_seeds[:num_seeds_per_part]]
+        
+        # 从剩余种子中随机选择另一半
+        remaining_seeds = list(set(self.candidate_seeds) - set(selected_old))
+        selected_new = np.random.choice(remaining_seeds,
+                                      size=self.args.num_seed - len(selected_old),
+                                      replace=False)
+        
+        self.selected_seeds = np.concatenate([selected_old, selected_new])
+        
+        # 保存本轮选择的种子用于下一轮参考
+        if self.should_poison(round=self.current_round):
+            self.last_attack_seeds = self.selected_seeds.copy()
 
 

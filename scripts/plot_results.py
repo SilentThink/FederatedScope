@@ -7,7 +7,7 @@ plt.style.use('seaborn')
 sns.set_style("whitegrid")
 
 # Read CSV file
-df = pd.read_csv('../logs/20250415_135008/results.csv')
+df = pd.read_csv('../logs/20250415_144445(mem)/results.csv')
 
 # Calculate average Target_Loss for each Round
 avg_loss = df.groupby('Round')[['Target_Loss', 'Is_Poison_Round']].agg({
